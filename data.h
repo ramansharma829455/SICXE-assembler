@@ -71,6 +71,17 @@ map<string, op_code> OPTAB={
 
 set<string> assembler_directives = {"START", "END", "BYTE", "WORD", "RESB", "RESW", "BASE", "NOBASE", "EQU", "USE", "ORG", "LTORG"};
 
+map<string, int> REGISTER_SET = {
+    {"A", 0},
+    {"X", 1},
+    {"L", 2},
+    {"B", 3},
+    {"S", 4},
+    {"T", 5},
+    {"F", 6},
+    {"PC", 8},
+    {"SW", 9}
+};
 
 struct symbol{
     string label;
@@ -91,6 +102,13 @@ struct block{
     int block_locctr;
 };
 map <string,block> BLOCKTABLE;
+
+struct block_data {
+    int start_address;
+    int block_length;
+};
+
+vector<block_data> BLOCK_DATA;
 
 string program_name;
 int program_length;
@@ -121,6 +139,7 @@ bool check_operand_absolute(string operand){
     return true;
 
 }
+
 bool pass1_line_scraper(string line, string &label, string &opcode, string &operand) {
    
     istringstream iss(line);
@@ -164,18 +183,16 @@ bool pass1_line_scraper(string line, string &label, string &opcode, string &oper
 }
 
 
-//PASS 2
-
 struct text_record{
-    string initial = "T";
+    string initial = "T^";
     int start_address;
-    int length;  
-    string object_code;
+    int length;
+    string object_code = "";
 };
 
 vector<text_record> TEXT_RECORDS;
 
-bool pass2_line_scraper(string line, string &label, string &opcode, string &operand) {
+bool pass2_line_scraper(string line, string &line_no, int &locctr, int &program_block_no, string &label, string &opcode, string &operand) {
    
     istringstream iss(line);
     vector<string> tokens;
@@ -187,6 +204,9 @@ bool pass2_line_scraper(string line, string &label, string &opcode, string &oper
         label=opcode=operand="";
         return false;
     }
+    line_no = tokens[0];
+    locctr = stoi(tokens[1], nullptr, 16);
+    program_block_no = stoi(tokens[2], nullptr, 10);
     if (tokens.size() == 4) {
         label = "";
         opcode = tokens[3];
@@ -216,7 +236,6 @@ bool pass2_line_scraper(string line, string &label, string &opcode, string &oper
     
     
 }
-
 
 // Function to perform arithmetic operations.
 int performOperation(char operation, int operand1, int operand2) {
@@ -431,4 +450,164 @@ void handle_expression(string operand,int &value, bool &isValid, bool & isRelati
 
 }
 
+
+string handleFormat2(string opcode, string operand, bool &error_flag) {
+    vector<string> tokens;
+    string token;
+    for(int i=0;i<operand.size();i++){
+        if(operand[i]==','){
+            tokens.push_back(token);
+            token="";
+            continue;
+        }
+        token+=operand[i];
+    }
+    if(token.size()) {
+        tokens.push_back(token);
+    }
+
+    if(opcode == "ADDR" || opcode == "COMPR" || opcode == "DIVR" || opcode == "MULR" || opcode == "RMO" || opcode == "SUBR") {
+
+        if(tokens.size() != 2) {
+            error_flag = true;
+            return "";
+        }
+
+        int operand1;
+        if(check_operand_absolute(tokens[0])) {
+            operand1 = stoi(tokens[0], nullptr, 10);
+        }
+        else if(REGISTER_SET.find(tokens[0]) != REGISTER_SET.end()) {
+            operand1 = REGISTER_SET[tokens[0]];     
+        }
+        else if(SYMTAB.find(tokens[0]) != SYMTAB.end()) {
+            operand1 = SYMTAB[tokens[0]].value;
+        }
+        else {
+            error_flag = true;
+            return "";
+        }
+        if(!(operand1 >= 0 && operand1 <= 9 && operand1 != 7)) {
+            error_flag = true;
+            return "";
+        }
+
+        int operand2;
+        if(check_operand_absolute(tokens[1])) {
+            operand1 = stoi(tokens[1], nullptr, 10);
+        }
+        else if(REGISTER_SET.find(tokens[1]) != REGISTER_SET.end()) {
+            operand2 = REGISTER_SET[tokens[1]];     
+        }
+        else if(SYMTAB.find(tokens[1]) != SYMTAB.end()) {
+            operand2 = SYMTAB[tokens[1]].value;
+        }
+        else {
+            error_flag = true;
+            return "";
+        }
+        if(!(operand1 >= 0 && operand1 <= 9 && operand1 != 7)) {
+            error_flag = true;
+            return "";
+        }
+
+        return decimalToTwosComplement(operand1, 1) + decimalToTwosComplement(operand2, 1);
+    }
+    else if(opcode == "SHIFTL" || opcode == "SHIFTR") {
+        if(tokens.size() != 2) {
+            error_flag = true;
+            return "";
+        }
+
+        int operand1;
+        if(check_operand_absolute(tokens[0])) {
+            operand1 = stoi(tokens[0], nullptr, 10);
+        }
+        else if(REGISTER_SET.find(tokens[0]) != REGISTER_SET.end()) {
+            operand1 = REGISTER_SET[tokens[0]];     
+        }
+        else if(SYMTAB.find(tokens[0]) != SYMTAB.end()) {
+            operand1 = SYMTAB[tokens[0]].value;
+        }
+        else {
+            error_flag = true;
+            return "";
+        }
+        if(!(operand1 >= 0 && operand1 <= 9 && operand1 != 7)) {
+            error_flag = true;
+            return "";
+        }
+
+        int operand2;
+        if(check_operand_absolute(tokens[1])) {
+            operand2 = stoi(tokens[1], nullptr, 10);
+        }
+        else if(SYMTAB.find(tokens[1]) != SYMTAB.end()) {
+            operand2 = SYMTAB[tokens[1]].value;
+        }
+        else {
+            error_flag = true;
+            return "";
+        }
+
+        if(!(operand2 >= 0 && operand2 <= 15)) {
+            error_flag = true;
+            return "";
+        }
+
+        return decimalToTwosComplement(operand1, 1) + decimalToTwosComplement(operand2, 1);
+    }
+    else if(opcode == "TIXR" || opcode == "CLEAR") {
+        if(tokens.size() != 1) {
+            error_flag = true;
+            return "";  
+        }
+
+        int operand1;
+        if(check_operand_absolute(tokens[0])) {
+            operand1 = stoi(tokens[0], nullptr, 10);
+        }
+        else if(REGISTER_SET.find(tokens[0]) != REGISTER_SET.end()) {
+            operand1 = REGISTER_SET[tokens[0]];     
+        }
+        else if(SYMTAB.find(tokens[0]) != SYMTAB.end()) {
+            operand1 = SYMTAB[tokens[0]].value;
+        }
+        else {
+            error_flag = true;
+            return "";
+        }
+        if(!(operand1 >= 0 && operand1 <= 9 && operand1 != 7)) {
+            error_flag = true;
+            return "";
+        }
+
+        return decimalToTwosComplement(operand1, 1) + "0";
+    }
+    else {
+        if(tokens.size() != 1) {
+            error_flag = true;
+            return "";
+        }
+
+        int operand1;
+        if(check_operand_absolute(tokens[0])) {
+            operand1 = stoi(tokens[0], nullptr, 10);
+        }
+        else if(SYMTAB.find(tokens[0]) != SYMTAB.end()) {
+            operand1 = SYMTAB[tokens[0]].value;
+        }
+        else {
+            error_flag = true;
+            return "";
+        }
+
+        if(!(operand1 >= 0 && operand1 <= 15)) {
+            error_flag = true;
+            return "";
+        }
+
+        return decimalToTwosComplement(operand1, 2) + "0";
+    }
+}
 
