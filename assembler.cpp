@@ -3,11 +3,11 @@
 
 using namespace std;
 
-void pass1(){
+bool pass1(){
     ifstream pass1_in("input.txt");
     ofstream pass1_out("intermediate.txt");
     ofstream pass1_err("error.txt");
-    
+
     string line;
     string label, opcode, operand;
 
@@ -28,11 +28,10 @@ void pass1(){
         //comment or blank line
         if(!pass1_line_scraper(line, label, opcode, operand)){
             pass1_out<<line<<endl;
+            continue;
         }
 
-        
-        //checklabel length <=6
-
+        //check label has length <=6
         if(label.size()>6) {
             pass1_err<<"Label size greater than 6 at line "<<line_no<<endl;
             pass1_out<<".--------ERROR--------------"<<endl;
@@ -40,49 +39,49 @@ void pass1(){
             continue;
         }
 
-        else{
-            if(opcode=="START"){
-                program_name = label;
-                LOCCTR = stoi(operand, nullptr, 16);                                 //initial location counter
-                if(BLOCKTABLE.find("default") == BLOCKTABLE.end()) {
-                    BLOCKTABLE["default"] = {"default",  total_blocks, 0, 0, 0};
-                    total_blocks++;
-                    current_block_no=BLOCKTABLE["default"].block_no;
-                    pass1_out<<line_no<< " "<<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
-                }
-                program_name = label;
-                break;
-            }
-            else if(opcode=="USE"){
-                //add in BLOCKTABLE
-
-                if(operand==""){
-                    operand="default";
-                }
-                BLOCKTABLE[operand] = {operand, total_blocks, 0, 0, 0};
+        if(opcode=="START"){
+            //store program name
+            program_name = label;
+            LOCCTR = stoi(operand, nullptr, 16);                                 //initial location counter
+            if(BLOCKTABLE.find("default") == BLOCKTABLE.end()) {
+                BLOCKTABLE["default"] = {"default",  total_blocks, 0, 0, 0};
                 total_blocks++;
-                current_block_no=BLOCKTABLE[operand].block_no;
-                LOCCTR = BLOCKTABLE[operand].block_locctr;
-                pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
-                continue;
+                current_block_no=BLOCKTABLE["default"].block_no;
+                pass1_out<<line_no<< " "<<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+            }
+            
+            break;
+        }
+        else if(opcode=="USE"){
+            //add in BLOCKTABLE
+            if(operand==""){
+                operand="default";
+            }
+            BLOCKTABLE[operand] = {operand, total_blocks, 0, 0, 0};
+            total_blocks++;
+            current_block_no=BLOCKTABLE[operand].block_no;
+            LOCCTR = BLOCKTABLE[operand].block_locctr;
+            pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+            continue;
 
-            }
-            else{
-                pass1_err<<"START not found at line "<<line_no<<endl;
-                pass1_out<<".--------ERROR--------------"<<endl;
-                error=true;
-                break;
-            }
-         }
+        }
+        else{
+            pass1_err<<"START not found at line "<<line_no<<endl;
+            pass1_out<<".--------ERROR--------------"<<endl;
+            error=true;
+            break;
+        }
+         
     }
 
     //handling further lines
     while(getline(pass1_in, line)){
-        //comment or blank line
+        
         line_no++;
-
+        //comment or blank line
         if(!pass1_line_scraper(line, label, opcode, operand)){
             pass1_out<<line<<endl;
+            continue;
         }
         //checklabel length <=6
         if(label.size()>6) {
@@ -130,6 +129,7 @@ void pass1(){
         }
         
         else if(opcode=="EQU"){
+            //cout<<label<<" "<<opcode<<" "<<operand<<endl;
         
             if(label==""){
                 pass1_err<<"No label assigned label to "<< opcode <<" at "<<line_no<<endl;
@@ -146,26 +146,43 @@ void pass1(){
             }
 
             //if operand is decimal value
-            else if(operand[0]>='0' && operand[0]<='9'){
+            else if(check_operand_absolute(operand)){
                 int value = stoi(operand, nullptr, 10);
-                SYMTAB[label] = {label, current_block_no, value, 2};
+                SYMTAB[label] = {label, current_block_no, value, 2};//absolute label
                 pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             }
             // if operand is a symbol
             else if(SYMTAB.find(operand) != SYMTAB.end()){
-                SYMTAB[label] = {label, current_block_no, SYMTAB[operand].value, 2};
+                SYMTAB[label] = {label, current_block_no, SYMTAB[operand].value, 1};//relative label
                 pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             }
             else if(operand == "*") {
-                SYMTAB[label] = {label, current_block_no, LOCCTR, 2};
+                //direct value assignment to label
+                SYMTAB[label] = {label, current_block_no, LOCCTR, 1};//relative label
                 pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             }
             
-
-
             else{
-               //handle expression TODO
-                pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+                //handle expression 
+                bool isValid = true;
+                bool isRelative = false;
+                int value = 0;
+                handle_expression(operand, value, isValid, isRelative);
+                if(isValid){
+                    if(isRelative){
+                        SYMTAB[label] = {label, current_block_no, value, 1};//relative label
+                    }
+                    else{
+                        SYMTAB[label] = {label, current_block_no, value, 2};//absolute label
+                    }
+                    pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+                }
+                else{
+                    pass1_err<<"Invalid expression for EQU at "<<line_no<<endl;
+                    pass1_out<<".--------ERROR--------------"<<endl;
+                    error=true;
+                    continue;
+                }
                  
             }
         
@@ -188,7 +205,7 @@ void pass1(){
             }
 
             //if operand is decimal value
-            else if(operand[0]>='0' && operand[0]<='9'){
+            else if(check_operand_absolute(operand)){
                 LOCCTR = stoi(operand, nullptr, 10);
                 pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             }
@@ -197,13 +214,28 @@ void pass1(){
                 LOCCTR=SYMTAB[operand].value;
                 pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             }
-            //handle expression TODO
             else{
-                //error
-                pass1_err<<"Invalid operand for "<<opcode<<" at "<<line_no<<endl;
-                pass1_out<<".--------ERROR--------------"<<endl;
-                error=true;
-                continue;
+                //handle expression
+                bool isValid = true;
+                bool isRelative = false;
+                int value = 0;
+                handle_expression(operand, value, isValid, isRelative);
+                if(isValid){
+                    if(isRelative){
+                        LOCCTR = value;
+                    }
+                    else{
+                        LOCCTR = value;
+                    }
+                    pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+                }
+                else{
+                    pass1_err<<"Invalid expression for ORG at "<<line_no<<endl;
+                    pass1_out<<".--------ERROR--------------"<<endl;
+                    error=true;
+                    continue;
+                }
+
             }
         
         }
@@ -223,12 +255,14 @@ void pass1(){
                 LITTAB.insert({operand, LOCCTR});
                 pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             }
+            //further pass 2 will handle for label or expression
+
             //label
             // else if(SYMTAB.find(operand) != SYMTAB.end()){
             //     pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             // }
             // //immmediate value
-            // else if(operand[0]>='0' && operand[0]<='9'){
+            // else if(check_operand_absolute(operand)){
             //     pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             // }
             // else {
@@ -262,12 +296,12 @@ void pass1(){
             pass1_out<< "   " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
 
             for(auto i:LITTAB){
-                if(i.first[0]=='*'){
-                    SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};
+                if(i.first[0]=='*'){//this is for BASE *
+                    SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};//relative label
                     pass1_out<<"    "  <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" BYTE "<<i.first<<" "<<i.second<<" "<<endl;
                 }
                 else if(i.first[0]=='='){
-                    SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};
+                    SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};//relative label
                     if(i.first[1]=='C'){
                         cout<<"locctr: "<<LOCCTR<<endl;
                         LOCCTR+=i.first.length()-4;
@@ -301,7 +335,7 @@ void pass1(){
                     continue;
                 }
                 else{
-                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};
+                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};//relative label
                 }
             }
             pass1_out<<line_no<< " "  
@@ -325,7 +359,7 @@ void pass1(){
                     continue;
                 }
                 else{
-                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};
+                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};//relative label
                 }
             }
 
@@ -379,10 +413,10 @@ void pass1(){
                     continue;
                 }
                 else{
-                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};
+                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};//relative label
                 }
             }
-            if(operand[0]>='0' && operand[0]<='9') {
+            if(check_operand_absolute(operand)) {
                 pass1_out<<line_no<< " "  
                 <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
                 LOCCTR+=3*stoi(operand);
@@ -413,10 +447,10 @@ void pass1(){
                     continue;
                 }
                 else{
-                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};
+                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};//relative label
                 }
             }
-            if(operand[0]>='0' && operand[0]<='9') {
+            if(check_operand_absolute(operand)) {
                 pass1_out<<line_no<< " "  
                 <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
                 LOCCTR+=stoi(operand);
@@ -436,13 +470,13 @@ void pass1(){
 
             //clear LITTAB
             for(auto i:LITTAB){
-                if(i.first[0]=='*'){
-                    SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};
+                if(i.first[0]=='*'){//this is for BASE *
+                    SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};//relative label
                     pass1_out<<"    "  <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" BYTE "<<i.first<<" "<<i.second<<" "<<endl;
                     
                 }
                 else if(i.first[0]=='='){
-                    SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};
+                    SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};//relative label
                     if(i.first[1]=='C'){
                         LOCCTR+=i.first.length()-4;
                     }
@@ -471,7 +505,7 @@ void pass1(){
                         continue;
                     }
                     else{
-                        SYMTAB[label] = {label, current_block_no, LOCCTR, 1};
+                        SYMTAB[label] = {label, current_block_no, LOCCTR, 1};//relative label
                     }
                 }
                 //handle operand
@@ -481,13 +515,15 @@ void pass1(){
                     operand = "";
                     operand += "#";
                     operand += to_string(LOCCTR);
+
                 }
                 else if(operand[0]=='=' && SYMTAB.find(operand.substr(1)) != SYMTAB.end()){
                     int value=SYMTAB[operand.substr(1)].value;
                     operand = "";
                     operand += "#";
                     operand += to_string(value);
-               
+
+            
                 }
                 else if( (operand.size()>4) && ((operand.substr(0,3)=="=X\'"&& operand[operand.size()-1]=='\'') ||( operand.substr(0,3) == "=C\'" && operand[operand.size()-1]=='\''))){
                     // literal_count++;
@@ -495,6 +531,7 @@ void pass1(){
                 }
                 
                 pass1_out<<line_no<< " "<<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+                
                 LOCCTR+=4;
             }
             else{
@@ -516,7 +553,7 @@ void pass1(){
                     continue;
                 }
                 else{
-                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};
+                    SYMTAB[label] = {label, current_block_no, LOCCTR, 1};//relative label
                 }
 
                             
@@ -529,20 +566,22 @@ void pass1(){
                 operand = "";
                 operand += "#";
                 operand += to_string(LOCCTR);
+
             }
             else if(operand[0]=='=' && SYMTAB.find(operand.substr(1)) != SYMTAB.end()){
                 int value=SYMTAB[operand.substr(1)].value;
                 operand = "";
                 operand += "#";
                 operand += to_string(value);
-            
+
+        
             }
             else if( (operand.size()>4) && ((operand.substr(0,3)=="=X\'"&& operand[operand.size()-1]=='\'') ||( operand.substr(0,3) == "=C\'" && operand[operand.size()-1]=='\''))){
                 // literal_count++;
                 LITTAB.insert({operand, 0});
             }
-
-            pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+            pass1_out<<line_no<< " "<<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+            
             LOCCTR+=OPTAB[opcode].opcode_format;
         }
        
@@ -565,7 +604,7 @@ void pass1(){
         cout<<i.second.label<<" "<<i.second.block_no<<" "<<i.second.value<<" "<<endl;
     }
 
-   //update BLOCKTABLE and program_length
+    //update BLOCKTABLE and program_length
 
     vector<pair<int, pair<int, string> > > vec;
     for(auto i:BLOCKTABLE){
@@ -581,11 +620,10 @@ void pass1(){
 
     // print BLOCKTABLE
     cout<<"---------------BLOCKTABLE ------------------"<<endl;
-
     for(auto i:BLOCKTABLE){
         cout<<i.second.block_name<<" "<<i.second.block_no<<" "<<hex<<i.second.block_locctr<<" "<<endl;
     }
-
+     return !error;
 }
 
 void pass2(){
@@ -641,8 +679,14 @@ void pass2(){
 
 int main() {
    
-    pass1();
-   // pass2();
+    bool pass1_completed_without_error=pass1();
+    if(pass1_completed_without_error){
+        cout<<"PASS 1 completed successfully"<<endl;
+    }
+    else{
+        cout<<"PASS 1 completed with errors"<<endl;
+    }
+    pass2();
 
     return 0;
 }

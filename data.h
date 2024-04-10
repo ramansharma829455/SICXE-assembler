@@ -72,13 +72,13 @@ map<string, op_code> OPTAB={
 set<string> assembler_directives = {"START", "END", "BYTE", "WORD", "RESB", "RESW", "BASE", "NOBASE", "EQU", "USE", "ORG", "LTORG"};
 
 
-struct SS{
+struct symbol{
     string label;
     int block_no;
     int value;
-    int flag; //0 for normal, 1 for relative, 2 for absolute
+    int isValid; //0 for normal, 1 for relative, 2 for absolute
 };
-map<string, SS> SYMTAB;
+map<string, symbol> SYMTAB;
 
 //literal=> label b
 set <pair<string, int> > LITTAB;
@@ -112,7 +112,15 @@ string decimalToTwosComplement(int decimalNumber, int hexStringLength) {
         return "";
     }
 }
+//utility function to check if operand is absolute
+bool check_operand_absolute(string operand){
+    for(int i=0; i<operand.size(); i++){
+        if(operand[i]>='0' && operand[i]<='9') continue;
+        else return false;            
+    }
+    return true;
 
+}
 bool pass1_line_scraper(string line, string &label, string &opcode, string &operand) {
    
     istringstream iss(line);
@@ -154,11 +162,6 @@ bool pass1_line_scraper(string line, string &label, string &opcode, string &oper
     
     
 }
-
-// int handle_operand(string operand, ){
-
-// }
-
 
 
 //PASS 2
@@ -213,3 +216,219 @@ bool pass2_line_scraper(string line, string &label, string &opcode, string &oper
     
     
 }
+
+
+// Function to perform arithmetic operations.
+int performOperation(char operation, int operand1, int operand2) {
+    switch (operation) {
+        case '+': return operand1 + operand2;
+        case '-': return operand1 - operand2;
+        case '*': return operand1 * operand2;
+        case '/': return operand1 / operand2;
+        default: return 0;
+    }
+}
+
+// Function to check if a character is an operator.
+bool isOperator(char ch) {
+    return (ch == '+' || ch == '-' || ch == '*' || ch == '/');
+}
+
+// Function to evaluate arithmetic expression using BODMAS rule.
+int evaluateExpression(string expression) {
+    stack<int> values;
+    stack<char> operators;
+
+    for (int i = 0; i < expression.length(); ++i) {
+        // If current character is a whitespace, skip it.
+        if (expression[i] == ' ')
+            continue;
+
+        // If current character is a digit or negative sign, push it to the values stack.
+        if (isdigit(expression[i]) || (expression[i] == '-' && (i == 0 || expression[i - 1] == '('))) {
+            int operand = 0;
+            int sign = 1;
+            if (expression[i] == '-') {
+                sign = -1;
+                ++i;
+            }
+            while (i < expression.length() && isdigit(expression[i])) {
+                operand = operand * 10 + (expression[i] - '0');
+                ++i;
+            }
+            --i; // To compensate for the extra increment in the loop
+            values.push(sign * operand);
+        }
+        // If current character is an opening parenthesis, push it to the operators stack.
+        else if (expression[i] == '(') {
+            operators.push(expression[i]);
+        }
+        // If current character is a closing parenthesis, solve the expression inside the parentheses.
+        else if (expression[i] == ')') {
+            while (!operators.empty() && operators.top() != '(') {
+                int operand2 = values.top();
+                values.pop();
+                int operand1 = values.top();
+                values.pop();
+                char op = operators.top();
+                operators.pop();
+                values.push(performOperation(op, operand1, operand2));
+            }
+            // Pop the opening parenthesis.
+            operators.pop();
+        }
+        // If current character is an operator.
+        else if (isOperator(expression[i])) {
+            // While top of 'operators' stack has same or greater precedence to current
+            // token, which is an operator. Apply operator on top of 'operators' stack
+            // to top two elements in values stack.
+            while (!operators.empty() && operators.top() != '(' &&
+                   ((expression[i] != '*' && expression[i] != '/') ||
+                    (operators.top() == '*' || operators.top() == '/'))) {
+                int operand2 = values.top();
+                values.pop();
+                int operand1 = values.top();
+                values.pop();
+                char op = operators.top();
+                operators.pop();
+                values.push(performOperation(op, operand1, operand2));
+            }
+            // Push current operator to 'operators'.
+            operators.push(expression[i]);
+        }
+    }
+
+    // At this point, the expression has been parsed.
+    // Apply remaining operators on remaining values.
+    while (!operators.empty()) {
+        int operand2 = values.top();
+        values.pop();
+        int operand1 = values.top();
+        values.pop();
+        char op = operators.top();
+        operators.pop();
+        values.push(performOperation(op, operand1, operand2));
+    }
+
+    // Top of 'values' stack contains the result of the expression.
+    return values.top();
+}
+
+
+void handle_expression(string operand,int &value, bool &isValid, bool & isRelative){
+    //print SYMTAB
+    //cout<<operand<<endl;
+    //for(auto x:SYMTAB){
+    //    cout<<x.first<<" "<<x.second.value<<" "<<x.second.isValid<<endl;
+    //}
+
+    bool isExpression=false;
+    //break operand with + , - , * , / 
+    vector<string> tokens;
+    string token;
+    for(int i=0;i<operand.size();i++){
+        if(operand[i]=='+' || operand[i]=='-' || operand[i]=='*' || operand[i]=='/'){
+            tokens.push_back(token);
+            token="";
+            token+=operand[i];
+            tokens.push_back(token);
+            token="";
+            isExpression=true;
+        }
+        else{
+            token+=operand[i];
+        }
+    }
+    if(token!="") tokens.push_back(token);
+
+    if(!isExpression){isValid=false; return;}
+
+    //cout<<"TOKENS: ";
+    //for(auto x:tokens){
+    //    cout<<x<<" ";
+    //}
+
+    //creating a check string for checking validity of the expression
+    string check="";
+
+    for(auto x:tokens){
+        if(x=="+" || x=="-" || x=="*" || x=="/"  ){
+            check+=x;
+            continue;
+        } 
+        else if(check_operand_absolute(x)){
+           check+="a";
+        }
+        else if(SYMTAB.find(x)==SYMTAB.end()){
+            //cout<<"Error: Symbol "<<x<<" not found in SYMTAB"<<endl;
+            isValid=false;//error
+            return;
+        }
+        else{
+            if(SYMTAB[x].isValid==1) check+="r";
+            else if(SYMTAB[x].isValid==2) check+="a";
+        }
+    }
+
+    check="+"+check;
+    //cout<<"CHECK: "<<check<<endl;
+    //Rules
+    //consecutive operand for * / should be 'a' only
+    int count_rel_positive=0;
+    int count_rel_negative=0;
+
+    for(int i=0;i<check.size()-1;i++){
+        
+        if((((check[i]=='a'|| check[i]=='r') && (check[i+1]=='a'|| check[i+1]=='r'))||
+            (!(check[i]=='a'|| check[i]=='r') && !(check[i+1]=='a'|| check[i+1]=='r'))||
+            (check[i]=='r' && check[i+1]=='/')||
+            (check[i]=='/' && check[i+1]=='r')||
+            (check[i]=='r' && check[i+1]=='*')||
+            (check[i]=='*' && check[i+1]=='r'))){
+                //cout<<"Error: Invalid expression"<<check[i]<<check[i+1]<<endl;
+                isValid=false;//error
+                return;
+        }
+        if(check[i]=='+' && check[i+1]=='r'){
+            count_rel_positive++;
+        }
+        if(check[i]=='-' && check[i+1]=='r'){
+            count_rel_negative++;
+        }
+    }
+    if((count_rel_positive<count_rel_negative) || (count_rel_positive-count_rel_negative>1)){
+        isValid=0;//error
+        return;
+    }
+
+    if(count_rel_negative==count_rel_positive){
+        isRelative=false;
+    }
+    else{
+        isRelative=true;
+    }
+
+    //Reaching here means expression is valid and all symbols are present in SYMTAB with their values
+    isValid=true;
+
+    //Evaluating the expression using BODMAS rule suing prefix expression
+    string generated_expression="";
+    for(auto x:tokens){
+        if(x=="+" || x=="-" || x=="*" || x=="/"){
+            generated_expression+=x;
+            continue;
+        }
+        if(check_operand_absolute(x)){
+            generated_expression+=("("+x+")");
+        }
+        else{
+            generated_expression+=("("+to_string(SYMTAB[x].value)+")");
+        }
+    }
+    //cout<<"GENERATED EXPRESSION: "<<generated_expression<<endl;
+    //Evaluating the expression
+    value=evaluateExpression(generated_expression);
+
+}
+
+
