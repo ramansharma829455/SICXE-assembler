@@ -1,6 +1,5 @@
 #include<bits/stdc++.h>
 #include "utility_functions.h"
-
 using namespace std;
 
 
@@ -1241,6 +1240,7 @@ bool pass2(){
     return !error;
 }
 
+//===================================MAIN FUNCTION=======================================
 int main() {
    
     bool pass1_completed_without_error=pass1();
