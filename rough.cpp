@@ -21,8 +21,8 @@ std::string decimalToTwosComplement(int decimalNumber, int hexStringLength) {
 }
 
 int main() {
-    int decimalNumber = 255; // Example decimal number
-    int hexStringLength = 6;  // Example length of the hexadecimal string
+    int decimalNumber = -23; // Example decimal number
+    int hexStringLength = 3;  // Example length of the hexadecimal string
     std::string twosComplementHex = decimalToTwosComplement(decimalNumber, hexStringLength);
     if (!twosComplementHex.empty()) {
         std::cout << "Twos complement of " << decimalNumber << " in hexadecimal base with length " << hexStringLength << " is: " << twosComplementHex << std::endl;
