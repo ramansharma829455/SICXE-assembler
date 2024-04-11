@@ -295,7 +295,7 @@ bool pass1(){
                 error=true;
                 continue;
             }
-            pass1_out<< "   " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
+            pass1_out<< line_no<<" " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
 
             for(auto i:LITTAB){
                 if(i.first[0]=='*'){//this is for BASE *
@@ -304,7 +304,7 @@ bool pass1(){
                 }
                 else if(i.first[0]=='='){
                     SYMTAB[i.first] = {i.first, current_block_no, LOCCTR, 1};//relative label
-                    pass1_out<<line_no<<" "  <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" BYTE "<<i.first<<" "<<i.second<<" "<<endl;
+                    pass1_out<<line_no<<" "  <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" BYTE "<<i.first<<" "<<endl;
                     if(i.first[1]=='C'){
                         LOCCTR+=i.first.length()-4;
                     }
@@ -1163,26 +1163,6 @@ bool pass2(){
         
         else if(opcode == "END") {
 
-            if(prev_RESW_RESB) {
-                prev_RESW_RESB = 0;
-                current_text_record.start_address = BLOCK_DATA[program_block_no].start_address + locctr;
-            }
-
-            if((program_block_no != prev_block_no) || (current_text_record.object_code_length + current_object_code.length() > 60)) {
-                //store current text record
-                current_text_record.length = current_text_record.object_code_length/2;
-                TEXT_RECORDS.push_back(current_text_record);
-                //create new text record
-                current_text_record = text_record();
-                current_text_record.start_address = BLOCK_DATA[program_block_no].start_address + locctr;
-                current_text_record.object_code += "^" + current_object_code;
-                current_text_record.object_code_length += current_object_code.length();
-                prev_block_no = program_block_no;
-            }
-            else {
-                current_text_record.object_code += "^" + current_object_code;
-                current_text_record.object_code_length += current_object_code.length();
-            }
 
             //write end record
 
@@ -1215,7 +1195,7 @@ bool pass2(){
     }//END OF INTERMEDIATE FILE
 
     // push last text record if exist
-    if(current_object_code.size() > 0) {
+    if(current_text_record.object_code_length > 0) {
         current_text_record.length = current_text_record.object_code_length/2;
         TEXT_RECORDS.push_back(current_text_record);
     }
