@@ -94,7 +94,7 @@ bool pass1(string input_file){
         }
 
         else if(opcode=="START"){
-            pass1_err<<"START double time "<<line_no<<endl;
+            pass1_err<<"START appeared again at "<<line_no<<endl;
             pass1_out<<".--------ERROR--------------"<<endl;
             error=true;
             continue;
@@ -134,14 +134,19 @@ bool pass1(string input_file){
             //cout<<label<<" "<<opcode<<" "<<operand<<endl;
         
             if(label==""){
-                pass1_err<<"No label assigned label to "<< opcode <<" at "<<line_no<<endl;
+                pass1_err<<"No label assigned to "<< opcode <<" at "<<line_no<<endl;
                 pass1_out<<".--------ERROR--------------"<<endl;
                 error=true;
                 continue;
             }
            
             if(operand=="" || operand[0]=='='){
-                pass1_err<<"Assigning wrong operand to "<< opcode <<" at "<<line_no<<endl;
+                if(operand==""){
+                    pass1_err<<"No operand assigned to "<< opcode <<" at "<<line_no<<endl;
+                }
+                else{
+                    pass1_err<<"Assigning wrong operand to "<< opcode <<" at "<<line_no<<endl;
+                }
                 pass1_out<<".--------ERROR--------------"<<endl;
                 error=true;
                 continue;
@@ -200,7 +205,12 @@ bool pass1(string input_file){
             }
            
             if(operand=="" || operand[0]=='='){
-                pass1_err<<"Assigning wrong operand to "<< opcode <<" at "<<line_no<<endl;
+                if(operand==""){
+                    pass1_err<<"No operand assigned to LOCCTR at "<<line_no<<endl;
+                }
+                else{
+                    pass1_err<<"Assigning wrong operand to "<< opcode <<" at "<<line_no<<endl;
+                }
                 pass1_out<<".--------ERROR--------------"<<endl;
                 error=true;
                 continue;
@@ -258,23 +268,6 @@ bool pass1(string input_file){
                 pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
             }
             //further pass 2 will handle for label or expression
-
-            //label
-            // else if(SYMTAB.find(operand) != SYMTAB.end()){
-            //     pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
-            // }
-            // //immmediate value
-            // else if(check_operand_absolute(operand)){
-            //     pass1_out<<line_no<< " " <<decimalToTwosComplement(LOCCTR,5)<<" "<< current_block_no<<" "<<label<<" "<<opcode<<" "<<operand<<endl;
-            // }
-            // else {
-            //     pass1_err<<"Assigning wrong label to BASE at "<<line_no<<endl;
-            //     pass1_out<<".--------ERROR--------------"<<endl;
-            //     error=true;
-            //     continue;
-            // }
-            
-
             
         }
 
@@ -1188,7 +1181,7 @@ bool pass2(){
         }
         
         else {
-            pass2_err<<"Invalid opcode present at "<<line_no<<endl;
+            pass2_err<<"Invalid instruction present at "<<line_no<<endl;
             error=true;
             continue;
         }
